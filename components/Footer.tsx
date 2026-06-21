@@ -9,10 +9,10 @@ const IMAGE_LINKS = [
 ];
 
 const PDF_LINKS = [
-  { label: "Merge PDFs", href: "/pdf-tools#merge" },
-  { label: "Split PDF", href: "/pdf-tools#split" },
-  { label: "Compress PDF", href: "/pdf-tools#compress" },
-  { label: "Protect PDF", href: "/pdf-tools#protect" },
+  { label: "Merge PDFs", href: "/pdf-tools/merge-pdf" },
+  { label: "Split PDF", href: "/pdf-tools/split-pdf" },
+  { label: "Compress PDF", href: "/pdf-tools/compress-pdf" },
+  { label: "Protect PDF", href: "/pdf-tools/protect-pdf" },
 ];
 
 export function Footer() {

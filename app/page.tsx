@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, Clock, Lock, Sparkles, UploadCloud, Zap } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Lock,
+  Sparkles,
+  UploadCloud,
+  Zap,
+} from "lucide-react";
 import FAQSection from "@/components/FAQSection";
 import SectionHeader from "@/components/SectionHeader";
 import ToolCard from "@/components/ToolCard";
 import { homeFaqs } from "@/data/faqs";
 import { imageTools, pdfTools, popularTools } from "@/data/tools";
+import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Free PDF and Image Tools Online",
@@ -19,17 +27,20 @@ export const metadata: Metadata = {
 const benefits = [
   {
     title: "Simple workflows",
-    description: "Clear upload areas, previews, and actions make every tool easy to use.",
+    description:
+      "Clear upload areas, previews, and actions make every tool easy to use.",
     icon: Sparkles,
   },
   {
     title: "Fast interface",
-    description: "Lightweight pages and focused layouts help users find the right tool quickly.",
+    description:
+      "Lightweight pages and focused layouts help users find the right tool quickly.",
     icon: Zap,
   },
   {
     title: "Privacy-ready",
-    description: "The frontend is prepared for secure processing logic when the backend is added.",
+    description:
+      "The frontend is prepared for secure processing logic when the backend is added.",
     icon: Lock,
   },
 ];
@@ -69,7 +80,9 @@ export default function Home() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationJsonLd) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(webApplicationJsonLd),
+        }}
       />
       <script
         type="application/ld+json"
@@ -87,12 +100,13 @@ export default function Home() {
               Convert, edit, and organize files with FileCraft.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-              A modern, SEO-friendly website for PDF and image tools. Merge PDFs,
-              compress images, convert file formats, and prepare documents with a clean interface.
+              A modern, SEO-friendly website for PDF and image tools. Merge
+              PDFs, compress images, convert file formats, and prepare documents
+              with a clean interface.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/tools"
+                href="/pdf-tools"
                 className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-900/20 transition hover:scale-[1.02]"
               >
                 Explore all tools
@@ -125,11 +139,17 @@ export default function Home() {
                 {popularTools.slice(0, 4).map((tool) => (
                   <Link
                     key={tool.slug}
-                    href={`/tools/${tool.slug}`}
+                    href={
+                      tool.category === "pdf"
+                        ? `/pdf-tools/${tool.slug}`
+                        : "/image-tools"
+                    }
                     className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:translate-x-1 dark:bg-slate-900 dark:text-slate-200"
                   >
                     {tool.title}
-                    <span className="text-cyan-700 dark:text-cyan-300">Open</span>
+                    <span className="text-cyan-700 dark:text-cyan-300">
+                      Open
+                    </span>
                   </Link>
                 ))}
               </div>
@@ -175,7 +195,10 @@ export default function Home() {
                 key={benefit.title}
                 className="rounded-2xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900"
               >
-                <benefit.icon className="size-8 text-cyan-700 dark:text-cyan-300" aria-hidden="true" />
+                <benefit.icon
+                  className="size-8 text-cyan-700 dark:text-cyan-300"
+                  aria-hidden="true"
+                />
                 <h3 className="mt-5 text-lg font-semibold text-slate-950 dark:text-white">
                   {benefit.title}
                 </h3>
@@ -204,7 +227,9 @@ export default function Home() {
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-cyan-600 text-sm font-bold text-white">
                   {index + 1}
                 </span>
-                <p className="pt-2 text-slate-700 dark:text-slate-200">{step}</p>
+                <p className="pt-2 text-slate-700 dark:text-slate-200">
+                  {step}
+                </p>
               </div>
             ))}
           </div>
@@ -213,16 +238,20 @@ export default function Home() {
 
       <section className="bg-white py-20 dark:bg-slate-950">
         <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
-          <CheckCircle2 className="mx-auto size-10 text-cyan-700 dark:text-cyan-300" aria-hidden="true" />
+          <CheckCircle2
+            className="mx-auto size-10 text-cyan-700 dark:text-cyan-300"
+            aria-hidden="true"
+          />
           <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
             Online PDF and image converter tools for everyday work
           </h2>
           <p className="mt-5 text-base leading-8 text-slate-600 dark:text-slate-300">
-            FileCraft helps people discover the right PDF converter, image compressor,
-            image resizer, PDF organizer, OCR tool, and format converter from one
-            responsive website. Each page uses semantic content, helpful descriptions,
-            clean URLs, and structured data so the site is ready for search engines
-            and easy for visitors to navigate.
+            FileCraft helps people discover the right PDF converter, image
+            compressor, image resizer, PDF organizer, OCR tool, and format
+            converter from one responsive website. Each page uses semantic
+            content, helpful descriptions, clean URLs, and structured data so
+            the site is ready for search engines and easy for visitors to
+            navigate.
           </p>
           <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-200">
             <Clock className="size-4" aria-hidden="true" />
@@ -232,6 +261,7 @@ export default function Home() {
       </section>
 
       <FAQSection faqs={homeFaqs} />
+      <Footer />
     </>
   );
 }
@@ -253,7 +283,11 @@ function ToolSection({
     <section className="py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <SectionHeader eyebrow={eyebrow} title={title} description={description} />
+          <SectionHeader
+            eyebrow={eyebrow}
+            title={title}
+            description={description}
+          />
           {href ? (
             <Link
               href={href}

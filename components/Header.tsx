@@ -5,22 +5,35 @@ import { useEffect, useRef, useState } from "react";
 import {
   Image as ImageIcon,
   FileText,
+  FileType,
   Crop,
   Repeat,
-  Gauge,
   Layers,
   Scissors,
   Combine,
-  Lock,
   Unlock,
+  ShieldCheck,
   RotateCw,
-  FileOutput,
   Minimize2,
   Menu,
   X,
   ChevronDown,
   ArrowRight,
   Sparkles,
+  Archive,
+  FileImage,
+  ImagePlus,
+  Table,
+  Sheet,
+  Presentation,
+  Projector,
+  PanelTop,
+  Copy,
+  ListOrdered,
+  Badge,
+  ScanText,
+  ScanLine,
+  Trash2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
@@ -64,49 +77,127 @@ const PDF_ITEMS: MegaItem[] = [
     label: "Merge PDFs",
     description: "Combine files in your order",
     icon: Combine,
-    href: "/pdf-tools#merge",
+    href: "/pdf-tools/merge-pdf",
   },
   {
     label: "Split & extract",
     description: "Pull out pages or page ranges",
     icon: Scissors,
-    href: "/pdf-tools#split",
+    href: "/pdf-tools/split-pdf",
   },
   {
     label: "Compress",
     description: "Reduce size for sharing",
-    icon: Gauge,
-    href: "/pdf-tools#compress",
+    icon: Archive,
+    href: "/pdf-tools/compress-pdf",
+  },
+  {
+    label: "PDF to Image",
+    description: "Export pages as images",
+    icon: FileImage,
+    href: "/pdf-tools/pdf-to-image",
+  },
+  {
+    label: "Image to PDF",
+    description: "Build a PDF from images",
+    icon: ImagePlus,
+    href: "/pdf-tools/image-to-pdf",
+  },
+  {
+    label: "PDF to Word",
+    description: "Create editable documents",
+    icon: FileText,
+    href: "/pdf-tools/pdf-to-word",
+  },
+  {
+    label: "Word to PDF",
+    description: "Export DOC or DOCX files",
+    icon: FileType,
+    href: "/pdf-tools/word-to-pdf",
+  },
+  {
+    label: "PDF to Excel",
+    description: "Extract tables to sheets",
+    icon: Table,
+    href: "/pdf-tools/pdf-to-excel",
+  },
+  {
+    label: "Excel to PDF",
+    description: "Turn sheets into reports",
+    icon: Sheet,
+    href: "/pdf-tools/excel-to-pdf",
+  },
+  {
+    label: "PDF to PowerPoint",
+    description: "Create editable slides",
+    icon: Presentation,
+    href: "/pdf-tools/pdf-to-powerpoint",
+  },
+  {
+    label: "PowerPoint to PDF",
+    description: "Save decks as PDFs",
+    icon: Projector,
+    href: "/pdf-tools/powerpoint-to-pdf",
   },
   {
     label: "Rotate pages",
     description: "Fix sideways scans",
     icon: RotateCw,
-    href: "/pdf-tools#rotate",
+    href: "/pdf-tools/rotate-pdf",
   },
   {
     label: "Protect with password",
     description: "Lock a PDF before sending it",
-    icon: Lock,
-    href: "/pdf-tools#protect",
+    icon: ShieldCheck,
+    href: "/pdf-tools/protect-pdf",
   },
   {
     label: "Remove password",
     description: "Unlock a PDF you own",
     icon: Unlock,
-    href: "/pdf-tools#unlock",
+    href: "/pdf-tools/unlock-pdf",
   },
   {
-    label: "Convert to PDF",
-    description: "Images and docs to PDF",
-    icon: FileOutput,
-    href: "/pdf-tools#convert",
+    label: "Organize PDF",
+    description: "Reorder and manage pages",
+    icon: PanelTop,
+    href: "/pdf-tools/organize-pdf",
   },
   {
-    label: "PDF to images",
-    description: "Export pages as JPG or PNG",
-    icon: ImageIcon,
-    href: "/pdf-tools#export",
+    label: "Extract pages",
+    description: "Save selected pages",
+    icon: Copy,
+    href: "/pdf-tools/extract-pdf-pages",
+  },
+  {
+    label: "Delete pages",
+    description: "Remove unwanted pages",
+    icon: Trash2,
+    href: "/pdf-tools/delete-pdf-pages",
+  },
+  {
+    label: "Page numbers",
+    description: "Add clean numbering",
+    icon: ListOrdered,
+    href: "/pdf-tools/add-page-numbers",
+  },
+  {
+    label: "Watermark",
+    description: "Add text or image marks",
+    icon: Badge,
+    href: "/pdf-tools/add-watermark",
+  },
+  {
+    label: "PDF OCR",
+    description: "Make scans searchable",
+    icon: ScanText,
+    href: "/pdf-tools/pdf-ocr",
+  },
+  {
+    label: "Scan to PDF",
+    description: "Create PDFs from scans",
+    icon: ScanLine,
+    href: "/pdf-tools/scan-to-pdf",
   },
 ];
 
@@ -136,10 +227,9 @@ export function Header() {
 
   return (
     <>
-      {/* Overlay - separate from header */}
       {openMenu && (
         <div
-          className="fixed inset-0 z-40 opacity-90 backdrop-blur-lg transition-all duration-200"
+          className="fixed inset-0 z-40 bg-slate-950/10 transition-opacity duration-200 dark:bg-black/25"
           onClick={() => setOpenMenu(null)}
         />
       )}
@@ -289,18 +379,30 @@ function NavMenu({
 
       {isOpen && (
         <div
-          className="absolute left-1/2 top-[calc(100%+8px)] z-50 w-[640px] -translate-x-1/2 animate-fade-up"
+          className={cn(
+            "fixed left-1/2 top-[72px] z-[60] max-h-[calc(100vh-88px)] -translate-x-1/2 animate-fade-up overflow-y-auto px-4",
+            items.length > 12
+              ? "w-full max-w-5xl"
+              : "w-full max-w-3xl",
+          )}
           role="menu"
         >
-          <div className="overflow-hidden rounded-2xl border border-border/50 bg-paper/95 backdrop-blur-xl shadow-2xl">
-            <div className="grid grid-cols-2 gap-1 p-3">
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-slate-800 dark:bg-slate-950 dark:shadow-black/50">
+            <div
+              className={cn(
+                "grid gap-1 p-3",
+                items.length > 12
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                  : "grid-cols-1 sm:grid-cols-2",
+              )}
+            >
               {items.map((item) => (
                 <Link
                   key={item.label}
                   href={item.href}
                   onClick={onClose}
                   role="menuitem"
-                  className="group flex items-start gap-3 rounded-lg p-3 transition-colors hover:bg-paper-sunken"
+                  className="group flex min-w-0 items-start gap-3 rounded-md p-3 transition-colors hover:bg-paper-sunken"
                 >
                   <span
                     className={cn(
@@ -313,11 +415,11 @@ function NavMenu({
                       strokeWidth={2}
                     />
                   </span>
-                  <span>
-                    <span className="block text-sm font-medium text-ink">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-ink">
                       {item.label}
                     </span>
-                    <span className="block text-xs text-ink-faint">
+                    <span className="block text-xs leading-5 text-ink-faint">
                       {item.description}
                     </span>
                   </span>
