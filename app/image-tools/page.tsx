@@ -631,7 +631,7 @@ function ImageRow({
       : null;
 
   return (
-    <li className="flex relative items-center gap-3 rounded-lg border border-border bg-paper-raised p-2.5 shadow-soft">
+    <li className="flex flex-wrap relative items-center gap-3 rounded-lg border border-border bg-paper-raised p-2.5 shadow-soft">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={entry.previewUrl}
@@ -639,7 +639,7 @@ function ImageRow({
         className="h-18 w-18 shrink-0 rounded-md object-cover"
       />
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 flex-wrap">
         <p
           className="truncate text-sm font-medium text-ink"
           title={entry.file.name}
