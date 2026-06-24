@@ -9,17 +9,12 @@ import {
   PlayCircle,
   Trash2,
   Image as ImageIcon,
-  Settings2,
-  Check,
   X,
   Loader2,
 } from "lucide-react";
 import { FileDropzone } from "@/components/file-dropzone";
 import { SegmentedControl } from "@/components/segment-control";
 import { Slider } from "@/components/slider";
-import { Toggle } from "@/components/toggle";
-import { Tooltip } from "@/components/tooltip";
-import { Popover } from "@/components/popover";
 import { ProgressRing } from "@/components/progress-ring";
 import { formatBytes, cn } from "@/lib/utils";
 import {
@@ -68,7 +63,7 @@ export default function ImageToolsPage() {
 
   // Global settings (used when applyToAll is true)
   const [applyToAll, setApplyToAll] = useState(true);
-  const [format, setFormat] = useState<OutputFormat | any>("");
+  const [format, setFormat] = useState<OutputFormat>("original");
   const [reduceQuality, setReduceQuality] = useState(false); // off by default
   const [quality, setQuality] = useState(90);
   const [resizeMode, setResizeMode] = useState<"none" | "percent" | "exact">(
@@ -93,12 +88,15 @@ export default function ImageToolsPage() {
   const handleFiles = useCallback(
     (files: File[]) => {
       const accepted = files.filter((f) => f.type.startsWith("image/"));
+
       const entries: ImageEntry[] = accepted.map((file) => ({
         id: makeId(file),
         file,
         previewUrl: URL.createObjectURL(file),
       }));
+
       setImages((prev) => [...prev, ...entries]);
+
       entries.forEach((entry) => {
         setMeta((prev) => ({ ...prev, [entry.id]: { ...DEFAULT_META } }));
         readImageMeta(entry.file)
@@ -177,6 +175,7 @@ export default function ImageToolsPage() {
         error: undefined,
       });
       try {
+        // console.log("entry",entry,"opts",opts)
         const blob = await convertImage(entry.file, opts);
         const resultUrl = URL.createObjectURL(blob);
         patchMeta(entry.id, {
@@ -232,6 +231,7 @@ export default function ImageToolsPage() {
   const doneCount = images.filter(
     (img) => meta[img.id]?.status === "done",
   ).length;
+
   const totalOriginal = useMemo(
     () => images.reduce((s, i) => s + i.file.size, 0),
     [images],
@@ -467,10 +467,10 @@ export default function ImageToolsPage() {
                   <select
                     value={format}
                     title="Choose the file type every output is saved as."
-                    onChange={(e) => setFormat(e.target.value)}
+                    onChange={(e:any) => setFormat(e.target.value)}
                     className=" w-fit rounded-full border border-sand-300  py-2 pl-9 pr-4 text-sm text-ink shadow-sm outline-none dark:bg-black  transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20"
                   >
-                    <option value={""}>{"Convert format"}</option>
+                    <option value={"original"}>{"Convert format"}</option>
                     {FORMAT_OPTIONS.map((option) => (
                       <option
                         className=""
