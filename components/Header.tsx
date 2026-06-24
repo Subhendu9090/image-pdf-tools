@@ -50,25 +50,25 @@ const IMAGE_ITEMS: MegaItem[] = [
     label: "Convert format",
     description: "JPG, PNG, WebP, AVIF & more",
     icon: Repeat,
-    href: "/image-tools#convert",
+    href: "/image-tools/convert",
   },
   {
     label: "Compress",
     description: "Shrink file size, keep clarity",
     icon: Minimize2,
-    href: "/image-tools#compress",
+    href: "/image-tools/compress",
   },
   {
     label: "Resize",
     description: "Exact dimensions or scale %",
     icon: Crop,
-    href: "/image-tools#resize",
+    href: "/image-tools/resize",
   },
   {
     label: "Batch process",
     description: "Apply one setting to every file",
     icon: Layers,
-    href: "/image-tools#batch",
+    href: "/image-tools/batch",
   },
 ];
 
