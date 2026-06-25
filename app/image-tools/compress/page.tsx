@@ -13,195 +13,233 @@ import {
 import { FileDropzone } from "@/components/file-dropzone";
 import { Slider } from "@/components/slider";
 import { formatBytes, cn } from "@/lib/utils";
-import {
-  convertImage,
-  isNoOp,
-  extensionFor,
-  readImageMeta,
-  type ConvertOptions,
-  type OutputFormat,
-  type ImageMeta,
-} from "@/lib/image-convert";
 
-interface ImageEntry {
+export type ImageItem = {
   id: string;
   file: File;
   previewUrl: string;
-}
+  name: string;
+  meta: {
+    width: number;
+    height: number;
+    size: number;
+  };
 
-type Status = "idle" | "processing" | "done" | "error";
+  status: "idle" | "processing" | "done" | "error";
+  quality: number;
+  compressedPercentage?: number;
 
-interface ImageMetaState extends Partial<ImageMeta> {
-  status: Status;
-  progress: number;
-  resultBlob?: Blob;
-  resultUrl?: string;
+  compressedBlob?: Blob;
+  compressedUrl?: string;
+
+  compressedSize?: number;
+
   error?: string;
-  quality?: number;
-}
-
-const DEFAULT_META: ImageMetaState = {
-  status: "idle",
-  progress: 0,
-  quality: 100,
 };
 
 function makeId(file: File) {
   return `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function CompressPage() {
-  const [images, setImages] = useState<ImageEntry[]>([]);
-  const [meta, setMeta] = useState<Record<string, ImageMetaState>>({});
+export async function getImageDimensions(file: File) {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
 
+    img.onload = () => {
+      resolve({
+        width: img.width,
+        height: img.height,
+      });
+
+      URL.revokeObjectURL(url);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to read image"));
+    };
+
+    img.src = url;
+  });
+}
+
+export async function compressImage(
+  file: File,
+  quality: number = 80,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("Canvas not supported"));
+        return;
+      }
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      ctx.drawImage(img, 0, 0);
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+
+          if (!blob) {
+            reject(new Error("Compression failed"));
+            return;
+          }
+
+          resolve(blob);
+        },
+        "image/jpeg", // output format
+        quality / 100, // 0-1
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Invalid image"));
+    };
+
+    img.src = url;
+  });
+}
+
+export default function CompressPage() {
+  const [images, setImages] = useState<ImageItem[]>([]);
   const [applyToAll, setApplyToAll] = useState(true);
   const [quality, setQuality] = useState(70);
-  const [qualityOpen, setQualityOpen] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
+  const [isCompressed, setisCompressed] = useState(false)
 
-  const patchMeta = useCallback(
-    (id: string, patch: Partial<ImageMetaState>) => {
-      setMeta((prev) => ({
-        ...prev,
-        [id]: { ...DEFAULT_META, ...prev[id], ...patch },
-      }));
-    },
-    [],
-  );
+  function patchImage(id: string, patch: Partial<ImageItem>) {
+    setImages((prev) =>
+      prev.map((img) => (img.id === id ? { ...img, ...patch } : img)),
+    );
+  }
 
-  const handleFiles = useCallback(
-    (files: File[]) => {
-      const accepted = files.filter((f) => f.type.startsWith("image/"));
+  async function processOne(image: ImageItem) {
+    const imageQuality = applyToAll ? quality : image.quality;
 
-      const entries: ImageEntry[] = accepted.map((file) => ({
-        id: makeId(file),
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
+    patchImage(image.id, {
+      status: "processing",
+      error: undefined,
+    });
 
-      setImages((prev) => [...prev, ...entries]);
+    try {
+      const blob = await compressImage(image.file, imageQuality);
+      const compressedUrl = URL.createObjectURL(blob);
 
-      entries.forEach((entry) => {
-        setMeta((prev) => ({ ...prev, [entry.id]: { ...DEFAULT_META } }));
-        readImageMeta(entry.file)
-          .then((dims) => patchMeta(entry.id, dims))
-          .catch(() => patchMeta(entry.id, { width: 0, height: 0 }));
+      const savedPercent = Math.round((1 - blob.size / image.file.size) * 100);
+
+      patchImage(image.id, {
+        status: "done",
+        compressedBlob: blob,
+        compressedUrl,
+        compressedSize: blob.size,
+        compressedPercentage: savedPercent,
       });
-    },
-    [patchMeta],
-  );
+    } catch (error) {
+      patchImage(image.id, {
+        status: "error",
+        error: "Compression failed",
+      });
+    }
+  }
+
+  async function runAll() {
+    setIsRunning(true);
+    setisCompressed(true)
+
+    for (const image of images) {
+      await processOne(image);
+    }
+
+    setIsRunning(false);
+  }
+
+  function downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadOne(image: ImageItem) {
+    const blob = image.compressedBlob ?? image.file;
+
+    const name = image.name.replace(/\.[^/.]+$/, "");
+    const fileName = image.compressedBlob
+      ? `${name}-compressed.jpg`
+      : image.name;
+
+    downloadBlob(blob, fileName);
+  }
+
+  function downloadAll() {
+    images.forEach((image) => {
+      downloadOne(image);
+    });
+  }
+
+  async function readImage(file: File) {
+    const dimensions = await getImageDimensions(file);
+
+    const image: ImageItem = {
+      id: makeId(file),
+      name: file.name,
+      file: file,
+      meta: {
+        width: dimensions.width,
+        size: file.size,
+        height: dimensions.height,
+      },
+      status: "idle",
+      previewUrl: URL.createObjectURL(file),
+      quality: quality,
+    };
+    return image;
+  }
+
+  async function handleFiles(files: File[]) {
+    try {
+      const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+
+      const results = await Promise.allSettled(
+        imageFiles.map((file) => readImage(file)),
+      );
+      console.log("results", results);
+      const imageItems = results
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value);
+
+      console.log("imageItems", imageItems);
+
+      setImages((prev) => [...prev, ...imageItems]);
+    } catch (error) {
+      console.error("Error", error);
+    }
+  }
 
   const removeImage = useCallback((id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
-    setMeta((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
   }, []);
 
   const clearAll = useCallback(() => {
     images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
     setImages([]);
-    setMeta({});
   }, [images]);
-
-  const optionsFor = useCallback(
-    (id: string): ConvertOptions => {
-      const m = meta[id];
-      const effQuality = applyToAll ? quality : (m?.quality ?? 100);
-      return {
-        format: "original" as OutputFormat,
-        quality: effQuality,
-        resizeMode: "none",
-        resizePercent: 100,
-        exactWidth: 0,
-        exactHeight: 0,
-        maintainAspect: true,
-      };
-    },
-    [applyToAll, quality, meta],
-  );
-
-  const globalIsNoOp = useMemo(() => quality >= 100, [quality]);
-
-  const processOne = useCallback(
-    async (entry: ImageEntry) => {
-      const opts = optionsFor(entry.id);
-      patchMeta(entry.id, {
-        status: "processing",
-        progress: 30,
-        error: undefined,
-      });
-      try {
-        const blob = await convertImage(entry.file, opts);
-        const resultUrl = URL.createObjectURL(blob);
-        patchMeta(entry.id, {
-          status: "done",
-          progress: 100,
-          resultBlob: blob,
-          resultUrl,
-        });
-      } catch (err) {
-        patchMeta(entry.id, {
-          status: "error",
-          progress: 0,
-          error:
-            err instanceof Error ? err.message : "Couldn't process this image",
-        });
-      }
-    },
-    [optionsFor, patchMeta],
-  );
-
-  const downloadOne = useCallback(
-    (entry: ImageEntry) => {
-      const m = meta[entry.id];
-      const opts = optionsFor(entry.id);
-      const baseName = entry.file.name.replace(/\.[^/.]+$/, "");
-      const ext = extensionFor(opts.format, entry.file.name);
-      const url = m?.resultUrl ?? entry.previewUrl;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${baseName}.${ext}`;
-      a.click();
-    },
-    [meta, optionsFor],
-  );
-
-  const runAll = useCallback(async () => {
-    setIsRunning(true);
-    for (const entry of images) {
-      const opts = optionsFor(entry.id);
-      if (isNoOp(entry.file, opts)) {
-        patchMeta(entry.id, { status: "done", progress: 100 });
-        continue;
-      }
-      await processOne(entry);
-    }
-    setIsRunning(false);
-  }, [images, optionsFor, processOne, patchMeta]);
-
-  const downloadAll = useCallback(() => {
-    images.forEach((entry) => downloadOne(entry));
-  }, [images, downloadOne]);
-
-  const doneCount = images.filter(
-    (img) => meta[img.id]?.status === "done",
-  ).length;
-
-  const totalOriginal = useMemo(
-    () => images.reduce((s, i) => s + i.file.size, 0),
-    [images],
-  );
-  const totalResult = useMemo(
-    () =>
-      images.reduce(
-        (s, i) => s + (meta[i.id]?.resultBlob?.size ?? i.file.size),
-        0,
-      ),
-    [images, meta],
-  );
 
   return (
     <>
@@ -219,7 +257,7 @@ export default function CompressPage() {
         <>
           <div className="sticky top-16 z-30 -mx-4 mb-5 border-b border-border bg-paper/95 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
             <div className="flex flex-wrap items-center justify-center md:justify-between md:gap-3 gap-6">
-              <div className="flex flex-wrap items-center gap-2">
+              { applyToAll && <div className="flex flex-wrap items-center gap-2">
                 <div className="relative justify-center items-center rounded-full">
                   <div className="   w-64 rounded-xl border bg-white p-3 shadow-lg dark:bg-black">
                     <div className="">
@@ -236,7 +274,7 @@ export default function CompressPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div>}
 
               <div className="flex items-center gap-2">
                 <label
@@ -263,7 +301,7 @@ export default function CompressPage() {
                     />
                   </span>
                 </label>
-                {doneCount > 0 && (
+                {isCompressed && (
                   <button
                     type="button"
                     onClick={downloadAll}
@@ -273,25 +311,39 @@ export default function CompressPage() {
                     Download all
                   </button>
                 )}
-                <button
+                {/* <button
                   type="button"
-                  onClick={globalIsNoOp ? downloadAll : runAll}
+                  // onClick={globalIsNoOp ? downloadAll : runAll}
                   disabled={isRunning}
                   className={cn(
                     "flex items-center gap-1.5 rounded-full bg-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition-opacity hover:opacity-90",
                     isRunning && "opacity-60",
                   )}
                 >
-                  {globalIsNoOp ? (
+                  {!isRunning ? (
                     <Download className="h-3.5 w-3.5" />
                   ) : (
                     <PlayCircle className="h-3.5 w-3.5" />
                   )}
                   {isRunning
                     ? "Processing…"
-                    : globalIsNoOp
+                    : true
                       ? `Download ${images.length} image${images.length === 1 ? "" : "s"}`
                       : `Compress ${images.length} image${images.length === 1 ? "" : "s"}`}
+                </button> */}
+
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full bg-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition-opacity hover:opacity-90",
+                    isRunning && "opacity-60",
+                  )}
+                  onClick={runAll}
+                  disabled={isRunning}
+                >
+                  {isRunning
+                    ? "Processing…"
+                    : `Compress ${images.length} images`}
                 </button>
                 <button
                   type="button"
@@ -305,13 +357,13 @@ export default function CompressPage() {
               </div>
             </div>
 
-            {doneCount > 0 && totalOriginal > 0 && !globalIsNoOp && (
+            {/* {doneCount > 0 && totalOriginal > 0 && !globalIsNoOp && (
               <p className="mt-2 text-xs text-ink-faint">
                 Total: {formatBytes(totalOriginal)} → {formatBytes(totalResult)}
                 {totalResult < totalOriginal &&
                   ` (saved ${Math.round((1 - totalResult / totalOriginal) * 100)}%)`}
               </p>
-            )}
+            )} */}
           </div>
 
           <button
@@ -335,11 +387,6 @@ export default function CompressPage() {
 
           <ul className="flex flex-col gap-4">
             {images.map((entry) => {
-              const m = meta[entry.id] ?? DEFAULT_META;
-              const savings =
-                m.resultBlob && m.resultBlob.size < entry.file.size
-                  ? Math.round((1 - m.resultBlob.size / entry.file.size) * 100)
-                  : null;
 
               return (
                 <li
@@ -349,66 +396,67 @@ export default function CompressPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={entry.previewUrl}
-                    alt={entry.file.name}
+                    alt={entry.name}
                     className="h-18 w-18 shrink-0 rounded-md object-cover"
                   />
 
                   <div className="min-w-0 flex-1 flex-wrap">
                     <p
                       className="truncate text-sm font-medium text-ink"
-                      title={entry.file.name}
+                      title={entry.name}
                     >
-                      {entry.file.name}
+                      {entry.name}
                     </p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs text-ink-faint">
                       <span>{formatBytes(entry.file.size)}</span>
-                      {m.width !== undefined && m.width > 0 && (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>
-                            {m.width}×{m.height}
-                          </span>
-                        </>
-                      )}
-                      {m.status === "done" && m.resultBlob && (
+                      {entry.meta.width !== undefined &&
+                        entry.meta.width > 0 && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>
+                              {entry.meta.width}×{entry.meta.height}
+                            </span>
+                          </>
+                        )}
+                      {entry.status === "done" && entry.compressedUrl && (
                         <>
                           <span aria-hidden>→</span>
                           <span
                             className={cn(
                               "font-medium",
-                              savings ? "text-teal-600 dark:text-teal-400" : "",
+                              true ? "text-teal-600 dark:text-teal-400" : "",
                             )}
                           >
-                            {formatBytes(m.resultBlob.size)}
-                            {savings ? ` (-${savings}%)` : ""}
+                            {formatBytes(entry.compressedSize ?? entry.file.size)}
+                            {true ? ` (-${entry.compressedPercentage}%)` : ""}
                           </span>
                         </>
                       )}
                     </div>
-                    {m.status === "error" && (
-                      <p className="mt-0.5 text-xs text-danger">{m.error}</p>
+                    {entry.status === "error" && (
+                      <p className="mt-0.5 text-xs text-danger">{entry.error}</p>
                     )}
                   </div>
 
                   {!applyToAll && (
                     <div className="mt-3 w-full sm:w-auto">
                       <Slider
-                        value={m.quality ?? 100}
+                        value={entry.quality}
+                        onChange={(q) => patchImage(entry.id, { quality: q })}
+                        valueLabel={`${entry.quality}%`}
                         min={10}
                         max={100}
-                        onChange={(q) => patchMeta(entry.id, { quality: q })}
                         accent="teal"
                         label="Quality"
-                        valueLabel={`${m.quality ?? 100}%`}
                       />
                     </div>
                   )}
 
                   <div className="flex shrink-0 items-center gap-1">
-                    {m.status === "processing" && (
+                    {entry.status === "processing" && (
                       <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
                     )}
-                    {m.status === "done" && (
+                    {entry.status === "done" && (
                       <button
                         title="Download"
                         type="button"
@@ -419,7 +467,7 @@ export default function CompressPage() {
                         <Download className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {m.status === "error" && (
+                    {entry.status === "error" && (
                       <button
                         title="Try again"
                         type="button"
@@ -435,7 +483,7 @@ export default function CompressPage() {
                       type="button"
                       title="Remove"
                       onClick={() => removeImage(entry.id)}
-                      aria-label={`Remove ${entry.file.name}`}
+                      aria-label={`Remove ${entry.name}`}
                       className="flex absolute bg-gray-200 dark:bg-gray-900 -top-3 -right-3 h-8 w-8 cursor-pointer items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink"
                     >
                       <X className="h-6 w-6" />
