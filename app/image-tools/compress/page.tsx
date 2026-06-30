@@ -1,10 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  Minimize2,
   Download,
-  PlayCircle,
   Trash2,
   Image as ImageIcon,
   X,
@@ -37,7 +35,7 @@ export type ImageItem = {
   error?: string;
 };
 
-function makeId(file: File) {
+export function makeId(file: File) {
   return `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -64,7 +62,7 @@ export async function getImageDimensions(file: File) {
   });
 }
 
-export async function compressImage(
+ async function compressImage(
   file: File,
   quality: number = 80,
 ): Promise<Blob> {
@@ -257,9 +255,9 @@ export default function CompressPage() {
         <>
           <div className="sticky top-16 z-30 -mx-4 mb-5 border-b border-border bg-paper/95 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
             <div className="flex flex-wrap items-center justify-center md:justify-between md:gap-3 gap-6">
-              { applyToAll && <div className="flex flex-wrap items-center gap-2">
+             <div className="flex flex-wrap items-center gap-2">
                 <div className="relative justify-center items-center rounded-full">
-                  <div className="   w-64 rounded-xl border bg-white p-3 shadow-lg dark:bg-black">
+                  { applyToAll &&<div className="   w-64 rounded-xl border bg-white p-3 shadow-lg dark:bg-black">
                     <div className="">
                       <Slider
                         id="quality-slider"
@@ -272,9 +270,9 @@ export default function CompressPage() {
                         valueLabel={`${quality}%`}
                       />
                     </div>
-                  </div>
+                  </div>}
                 </div>
-              </div>}
+              </div>
 
               <div className="flex items-center gap-2">
                 <label

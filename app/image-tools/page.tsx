@@ -250,25 +250,8 @@ export default function ImageToolsPage() {
   const [resizeOpen, setResizeOpen] = useState(false);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-      {/* SEO-friendly semantic header */}
-      {/* <header className="mb-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300">
-            <ImageIcon className="h-5 w-5" strokeWidth={2} aria-hidden />
-          </span>
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-ink sm:text-3xl">
-              Image tools
-            </h1>
-            <p className="mt-1 max-w-xl text-sm text-ink-soft">
-              Convert, compress, and resize JPG, PNG, WebP, AVIF, GIF, BMP, and
-              ICO images. Upload one file or a whole batch — everything runs in
-              your browser.
-            </p>
-          </div>
-        </div>
-      </header> */}
+    <div className="mx-auto max-w-6xl">
+    
 
       {/* Upload zone */}
       {images.length === 0 ? (

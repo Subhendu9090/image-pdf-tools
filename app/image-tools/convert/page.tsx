@@ -13,176 +13,304 @@ import {
 import { FileDropzone } from "@/components/file-dropzone";
 import { SegmentedControl } from "@/components/segment-control";
 import { formatBytes, cn } from "@/lib/utils";
-import {
-  convertImage,
-  isNoOp,
-  extensionFor,
-  readImageMeta,
-  FORMAT_OPTIONS,
-  type ConvertOptions,
-  type OutputFormat,
-  type ImageMeta,
-} from "@/lib/image-convert";
 
-interface ImageEntry {
+export type OutputFormat =
+  | "original"
+  | "jpeg"
+  | "png"
+  | "webp"
+  | "avif"
+  | "gif"
+  | "bmp"
+  | "ico";
+
+export const FORMAT_OPTIONS: { value: OutputFormat; label: string }[] = [
+  { value: "original", label: "Keep original" },
+  { value: "jpeg", label: "JPG" },
+  { value: "png", label: "PNG" },
+  { value: "webp", label: "WebP" },
+  { value: "avif", label: "AVIF" },
+  { value: "gif", label: "GIF" },
+  { value: "bmp", label: "BMP" },
+  { value: "ico", label: "ICO" },
+];
+
+export type ImageItem = {
   id: string;
   file: File;
   previewUrl: string;
-}
+  name: string;
+  meta: {
+    width: number;
+    height: number;
+    size: number;
+  };
 
-type Status = "idle" | "processing" | "done" | "error";
-
-interface ImageMetaState extends Partial<ImageMeta> {
-  status: Status;
-  progress: number;
+  status: "idle" | "processing" | "done" | "error";
+  currentFormat: OutputFormat;
+  outputFormat?: OutputFormat;
   resultBlob?: Blob;
   resultUrl?: string;
+  resultSize?: number;
   error?: string;
-  format?: OutputFormat;
-}
-
-const DEFAULT_META: ImageMetaState = {
-  status: "idle",
-  progress: 0,
-  format: "original",
 };
 
 function makeId(file: File) {
   return `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export async function getImageDimensions(file: File) {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      resolve({
+        width: img.width,
+        height: img.height,
+      });
+
+      URL.revokeObjectURL(url);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to read image"));
+    };
+
+    img.src = url;
+  });
+}
+
+function getMimeType(format: OutputFormat, originalType: string) {
+  switch (format) {
+    case "jpeg":
+      return "image/jpeg";
+
+    case "png":
+      return "image/png";
+
+    case "webp":
+      return "image/webp";
+
+    case "avif":
+      return "image/avif";
+
+    case "bmp":
+      // Canvas doesn't support exporting BMP.
+      // Fallback to PNG.
+      return "image/png";
+
+    case "original":
+    default:
+      return originalType;
+  }
+}
+
+function getOutputQuality(format: OutputFormat) {
+  if (format === "png") return undefined;
+  if (format === "gif") return undefined;
+  if (format === "bmp") return undefined;
+  if (format === "ico") return undefined;
+
+  return 0.8;
+}
+
+export async function convertImage(
+  file: File,
+  convertFormat: OutputFormat,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("Canvas is not supported."));
+        return;
+      }
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      ctx.drawImage(img, 0, 0);
+
+      const mimeType = getMimeType(convertFormat, file.type);
+      const quality = getOutputQuality(convertFormat);
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+
+          if (!blob) {
+            reject(new Error("Failed to convert image."));
+            alert("Failed to convert image.");
+            return;
+          }
+
+          resolve(blob);
+        },
+        mimeType,
+        quality,
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load image."));
+    };
+
+    img.src = url;
+  });
+}
+
 export default function ConvertPage() {
-  const [images, setImages] = useState<ImageEntry[]>([]);
-  const [meta, setMeta] = useState<Record<string, ImageMetaState>>({});
+  const [images, setImages] = useState<ImageItem[]>([]);
 
   const [applyToAll, setApplyToAll] = useState(true);
   const [format, setFormat] = useState<OutputFormat>("original");
   const [isRunning, setIsRunning] = useState(false);
 
-  const patchMeta = useCallback((id: string, patch: Partial<ImageMetaState>) => {
-    setMeta((prev) => ({
-      ...prev,
-      [id]: { ...DEFAULT_META, ...prev[id], ...patch },
-    }));
+  const patchImage = useCallback((id: string, patch: Partial<ImageItem>) => {
+    setImages((prev) =>
+      prev.map((img) => (img.id === id ? { ...img, ...patch } : img)),
+    );
   }, []);
 
-  const handleFiles = useCallback(
-    (files: File[]) => {
-      const accepted = files.filter((f) => f.type.startsWith("image/"));
+  async function processOne(image: ImageItem) {
+    const convertFormat = applyToAll
+      ? format
+      : (image.outputFormat as OutputFormat);
 
-      const entries: ImageEntry[] = accepted.map((file) => ({
-        id: makeId(file),
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
+    patchImage(image.id, {
+      status: "processing",
+      error: undefined,
+    });
 
-      setImages((prev) => [...prev, ...entries]);
+    try {
+      const blob = await convertImage(image.file, convertFormat);
+      const convertedUrl = URL.createObjectURL(blob);
 
-      entries.forEach((entry) => {
-        setMeta((prev) => ({ ...prev, [entry.id]: { ...DEFAULT_META } }));
-        readImageMeta(entry.file)
-          .then((dims) => patchMeta(entry.id, dims))
-          .catch(() => patchMeta(entry.id, { width: 0, height: 0 }));
+      // const savedPercent = Math.round((1 - blob.size / image.file.size) * 100);
+
+      patchImage(image.id, {
+        status: "done",
+        resultBlob: blob,
+        resultUrl: convertedUrl,
+        resultSize: blob.size,
       });
-    },
-    [patchMeta],
-  );
+    } catch (error) {
+      patchImage(image.id, {
+        status: "error",
+        error: "Compression failed",
+      });
+    }
+  }
+
+  async function runAll() {
+    setIsRunning(true);
+    // setisCompressed(true);
+
+    for (const image of images) {
+      await processOne(image);
+    }
+
+    setIsRunning(false);
+  }
+
+  function downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function getExtension(format: OutputFormat) {
+    if (format === "jpeg") return "jpg";
+    if (format === "original") return "";
+    return format;
+  }
+  function downloadOne(image: ImageItem) {
+    const blob = image.resultBlob ?? image.file;
+
+    const finalFormat = applyToAll
+      ? format
+      : (image.outputFormat ?? image.currentFormat);
+
+    const name = image.name.replace(/\.[^/.]+$/, "");
+
+    const fileName = image.resultBlob
+      ? `${name}.${getExtension(finalFormat)}`
+      : image.name;
+
+    downloadBlob(blob, fileName);
+  }
+
+  function downloadAll() {
+    images.forEach((image) => {
+      downloadOne(image);
+    });
+  }
+
+  async function readImage(file: File) {
+    const dimensions = await getImageDimensions(file);
+
+    const image: ImageItem = {
+      id: makeId(file),
+      name: file.name,
+      file: file,
+      meta: {
+        width: dimensions.width,
+        size: file.size,
+        height: dimensions.height,
+      },
+      status: "idle",
+      previewUrl: URL.createObjectURL(file),
+      currentFormat: file.type.split("/")[1] as OutputFormat,
+    };
+    return image;
+  }
+
+  async function handleFiles(files: File[]) {
+    try {
+      const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+
+      const results = await Promise.allSettled(
+        imageFiles.map((file) => readImage(file)),
+      );
+      console.log("results", results);
+      const imageItems = results
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value);
+
+      console.log("imageItems", imageItems);
+
+      setImages((prev) => [...prev, ...imageItems]);
+    } catch (error) {
+      console.error("Error", error);
+    }
+  }
 
   const removeImage = useCallback((id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
-    setMeta((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
   }, []);
 
   const clearAll = useCallback(() => {
     images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
     setImages([]);
-    setMeta({});
   }, [images]);
 
-  const optionsFor = useCallback(
-    (id: string): ConvertOptions => {
-      const m = meta[id];
-      const effFormat = applyToAll ? format : (m?.format ?? "original");
-      return {
-        format: effFormat,
-        quality: 100,
-        resizeMode: "none",
-        resizePercent: 100,
-        exactWidth: 0,
-        exactHeight: 0,
-        maintainAspect: true,
-      };
-    },
-    [applyToAll, format, meta],
-  );
+  const globalIsNoOp = applyToAll && format === "original";
 
-  const globalIsNoOp = useMemo(() => format === "original", [format]);
-
-  const processOne = useCallback(
-    async (entry: ImageEntry) => {
-      const opts = optionsFor(entry.id);
-      patchMeta(entry.id, { status: "processing", progress: 30, error: undefined });
-      try {
-        const blob = await convertImage(entry.file, opts);
-        const resultUrl = URL.createObjectURL(blob);
-        patchMeta(entry.id, { status: "done", progress: 100, resultBlob: blob, resultUrl });
-      } catch (err) {
-        patchMeta(entry.id, {
-          status: "error",
-          progress: 0,
-          error: err instanceof Error ? err.message : "Couldn't process this image",
-        });
-      }
-    },
-    [optionsFor, patchMeta],
-  );
-
-  const downloadOne = useCallback(
-    (entry: ImageEntry) => {
-      const m = meta[entry.id];
-      const opts = optionsFor(entry.id);
-      const baseName = entry.file.name.replace(/\.[^/.]+$/, "");
-      const ext = extensionFor(opts.format, entry.file.name);
-      const url = m?.resultUrl ?? entry.previewUrl;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${baseName}.${ext}`;
-      a.click();
-    },
-    [meta, optionsFor],
-  );
-
-  const runAll = useCallback(async () => {
-    setIsRunning(true);
-    for (const entry of images) {
-      const opts = optionsFor(entry.id);
-      if (isNoOp(entry.file, opts)) {
-        patchMeta(entry.id, { status: "done", progress: 100 });
-        continue;
-      }
-      await processOne(entry);
-    }
-    setIsRunning(false);
-  }, [images, optionsFor, processOne, patchMeta]);
-
-  const downloadAll = useCallback(() => {
-    images.forEach((entry) => downloadOne(entry));
-  }, [images, downloadOne]);
-
-  const doneCount = images.filter((img) => meta[img.id]?.status === "done").length;
-
-  const totalOriginal = useMemo(
-    () => images.reduce((s, i) => s + i.file.size, 0),
-    [images],
-  );
-  const totalResult = useMemo(
-    () => images.reduce((s, i) => s + (meta[i.id]?.resultBlob?.size ?? i.file.size), 0),
-    [images, meta],
-  );
+  const doneCount = images.filter((img) => img.status === "done").length;
 
   return (
     <>
@@ -201,7 +329,7 @@ export default function ConvertPage() {
           <div className="sticky top-16 z-30 -mx-4 mb-5 border-b border-border bg-paper/95 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-fit">
+                {applyToAll && <div className="relative w-fit">
                   <Repeat className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink" />
                   <select
                     value={format}
@@ -215,7 +343,7 @@ export default function ConvertPage() {
                       </option>
                     ))}
                   </select>
-                </div>
+                </div>}
               </div>
 
               <div className="flex items-center gap-2">
@@ -232,13 +360,13 @@ export default function ConvertPage() {
                       "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
                       applyToAll
                         ? "bg-teal-500"
-                        : "bg-paper-sunken bg-gray-300 dark:bg-black border border-border-strong",
+                        : " bg-gray-300 dark:bg-black border border-border-strong",
                     )}
                   >
                     <span
                       className={cn(
                         "inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform",
-                        applyToAll ? "translate-x-[22px]" : "translate-x-[3px]",
+                        applyToAll ? "translate-x-5.5" : "translate-x-0,75",
                       )}
                     />
                   </span>
@@ -285,18 +413,20 @@ export default function ConvertPage() {
               </div>
             </div>
 
-            {doneCount > 0 && totalOriginal > 0 && !globalIsNoOp && (
+            {/* {doneCount > 0 && totalOriginal > 0 && !globalIsNoOp && (
               <p className="mt-2 text-xs text-ink-faint">
                 Total: {formatBytes(totalOriginal)} → {formatBytes(totalResult)}
                 {totalResult < totalOriginal &&
                   ` (saved ${Math.round((1 - totalResult / totalOriginal) * 100)}%)`}
               </p>
-            )}
+            )} */}
           </div>
 
           <button
             type="button"
-            onClick={() => document.getElementById("add-more-input-convert")?.click()}
+            onClick={() =>
+              document.getElementById("add-more-input-convert")?.click()
+            }
             className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-paper-raised px-4 mt-20 text-sm font-medium text-ink-soft transition-colors hover:bg-paper-sunken py-8"
           >
             <ImageIcon className="h-6 w-6" />
@@ -313,12 +443,6 @@ export default function ConvertPage() {
 
           <ul className="flex flex-col gap-4">
             {images.map((entry) => {
-              const m = meta[entry.id] ?? DEFAULT_META;
-              const savings =
-                m.resultBlob && m.resultBlob.size < entry.file.size
-                  ? Math.round((1 - m.resultBlob.size / entry.file.size) * 100)
-                  : null;
-
               return (
                 <li
                   key={entry.id}
@@ -327,41 +451,47 @@ export default function ConvertPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={entry.previewUrl}
-                    alt={entry.file.name}
+                    alt={entry.name}
                     className="h-18 w-18 shrink-0 rounded-md object-cover"
                   />
 
                   <div className="min-w-0 flex-1 flex-wrap">
-                    <p className="truncate text-sm font-medium text-ink" title={entry.file.name}>
-                      {entry.file.name}
+                    <p
+                      className="truncate text-sm font-medium text-ink"
+                      title={entry.name}
+                    >
+                      {entry.name}
                     </p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs text-ink-faint">
                       <span>{formatBytes(entry.file.size)}</span>
-                      {m.width !== undefined && m.width > 0 && (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>
-                            {m.width}×{m.height}
-                          </span>
-                        </>
-                      )}
-                      {m.status === "done" && m.resultBlob && (
+                      {entry.meta.width !== undefined &&
+                        entry.meta.width > 0 && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>
+                              {entry.meta.width}×{entry.meta.height}
+                            </span>
+                          </>
+                        )}
+                      {entry.status === "done" && entry.resultBlob && (
                         <>
                           <span aria-hidden>→</span>
                           <span
                             className={cn(
                               "font-medium",
-                              savings ? "text-teal-600 dark:text-teal-400" : "",
+                              true ? "text-teal-600 dark:text-teal-400" : "",
                             )}
                           >
-                            {formatBytes(m.resultBlob.size)}
-                            {savings ? ` (-${savings}%)` : ""}
+                            {formatBytes(entry.resultBlob.size)}
+                            {/* {savings ? ` (-${savings}%)` : ""} */}
                           </span>
                         </>
                       )}
                     </div>
-                    {m.status === "error" && (
-                      <p className="mt-0.5 text-xs text-danger">{m.error}</p>
+                    {entry.status === "error" && (
+                      <p className="mt-0.5 text-xs text-danger">
+                        {entry?.error}
+                      </p>
                     )}
                   </div>
 
@@ -369,8 +499,10 @@ export default function ConvertPage() {
                     <div>
                       <SegmentedControl
                         options={FORMAT_OPTIONS}
-                        value={m.format ?? "original"}
-                        onChange={(f) => patchMeta(entry.id, { format: f })}
+                        value={entry.outputFormat ?? "original"}
+                        onChange={(f) =>
+                          patchImage(entry.id, { outputFormat: f })
+                        }
                         accent="teal"
                         size="sm"
                       />
@@ -378,10 +510,10 @@ export default function ConvertPage() {
                   )}
 
                   <div className="flex shrink-0 items-center gap-1">
-                    {m.status === "processing" && (
+                    {entry.status === "processing" && (
                       <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
                     )}
-                    {m.status === "done" && (
+                    {entry.status === "done" && (
                       <button
                         title="Download"
                         type="button"
@@ -392,7 +524,7 @@ export default function ConvertPage() {
                         <Download className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {m.status === "error" && (
+                    {entry.status === "error" && (
                       <button
                         title="Try again"
                         type="button"
