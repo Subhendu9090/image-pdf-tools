@@ -534,47 +534,50 @@ export default function ResizePage() {
             />
           </button>
 
-          <ul className="flex flex-col gap-4">
+          <ul className="flex flex-col flex-wrap gap-4">
             {images.map((entry) => {
               const showCustomControls = !applyToAll;
 
               return (
                 <li
                   key={entry.id}
-                  className="flex flex-wrap relative items-center gap-3 rounded-lg border border-border bg-paper-raised p-2.5 shadow-soft"
+                  className="flex flex-wrap flex-col justify-between md:flex-row relative items-center gap-3 rounded-lg border border-border bg-paper-raised p-2.5 shadow-soft"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={entry.previewUrl}
-                    alt={entry.name}
-                    className="h-18 w-18 shrink-0 rounded-md object-cover"
-                  />
 
-                  <div className="min-w-0 flex-1 flex-wrap">
-                    <p
-                      className="truncate text-sm font-medium text-ink"
-                      title={entry.name}
-                    >
-                      {entry.name}
-                    </p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs text-ink-faint">
-                      <span>{formatBytes(entry.file.size)}</span>
-                      <span aria-hidden>·</span>
-                      <span>
-                        {entry.meta.width}×{entry.meta.height}
-                      </span>
-                      {entry.status === "done" && entry.resultBlob && (
-                        <>
-                          <span aria-hidden>→</span>
-                          <span>{formatBytes(entry.resultBlob.size)}</span>
-                        </>
+                  <div className=" flex gap-2 flex-wrap items-center justify-center ">
+                    <img
+                      src={entry.previewUrl}
+                      alt={entry.name}
+                      className="h-18 w-18 shrink-0 rounded-md object-cover"
+                    />
+
+                    <div className="min-w-0 flex-1  flex-wrap">
+                      <p
+                        className="truncate mb-2 text-sm font-medium text-ink"
+                        title={entry.name}
+                      >
+                        {entry.name}
+                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs text-ink-faint">
+                        <span>{formatBytes(entry.file.size)}</span>
+                        <span aria-hidden>·</span>
+                        <span>
+                          {entry.meta.width}×{entry.meta.height}
+                        </span>
+                        {entry.status === "done" && entry.resultBlob && (
+                          <>
+                            <span aria-hidden>→</span>
+                            <span>{formatBytes(entry.resultBlob.size)}</span>
+                          </>
+                        )}
+                      </div>
+                      {entry.status === "error" && (
+                        <p className="mt-0.5 text-xs text-danger">
+                          {entry?.error}
+                        </p>
                       )}
                     </div>
-                    {entry.status === "error" && (
-                      <p className="mt-0.5 text-xs text-danger">
-                        {entry?.error}
-                      </p>
-                    )}
                   </div>
 
                   {showCustomControls && (
@@ -621,6 +624,7 @@ export default function ResizePage() {
                           }
                           className="rounded border-border-strong text-teal-500 focus:ring-teal-500"
                         />
+                        Keep Ratio
                         <Maximize2 className="h-3 w-3" />
                       </label>
                     </div>
